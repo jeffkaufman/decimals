@@ -86,6 +86,7 @@ ordered_examples = [
   "((551)57)4", # this isn't where I'd expect this to go
   "8",
   "89",
+  "(81)", # this isn't where I'd expect this to go either
   "9",
   "(9)",
   "(9)3",
