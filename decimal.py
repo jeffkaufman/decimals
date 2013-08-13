@@ -1,3 +1,5 @@
+# See http://mathwithbaddrawings.com/2013/08/13/the-kaufman-decimals
+
 class Decimal(object):
   def __init__(self, s, repeated=False, pos=0):
     def eat_subsequence():
