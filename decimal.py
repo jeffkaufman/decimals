@@ -1,116 +1,180 @@
+# See http://mathwithbaddrawings.com/2013/08/13/the-kaufman-decimals
+
 import copy
 
-def readit(s):
-    kd = list()
-    i = 0
-    while i<len(s):
-        if s[i]!="(":
-            kd.append(int(s[i]))
-        else:
-            start = i
-            level = 1
-            while level>0:
-                i+=1
-                if s[i]=="(": level+=1
-                elif s[i]==")": level-=1
-            repetition = readit(s[(start+1):i])
-            kd.append(repetition)
-        i+=1
-    return(kd)
-
-def degree(kd):
+def deg(kd):
+    # degree of the list    
+    # deg(number) = 0, deg(line) = 1, deg(plane) = 2 ...    
     if isinstance(kd , int): return(0)
-    if isinstance(kd , list): return(max([degree(k) for k in kd])+1)
+    if isinstance(kd , list): return(max([deg(k) for k in kd])+1)
 
-def cutFromBeginning(kd,output,order,rep):
-    while degree(kd[0]) < order: 
-        output.append(kd[0])
-	if rep:
-	    kd = kd[1:] + [kd[0]]
-	else:
-	    kd = kd[1:]
-	if len(kd) == 0: return None # empty 
-    if degree(kd[0]) > order:
-        kd[0] = cutFromBeginning(kd[0],output,order,1)
-    else: # imply degree(kd[0]) == order
-        output.append(kd[0])
-        if rep:
-	    kd = kd[1:] + [kd[0]]
-	else:
-	    kd = kd[1:]
-    return kd	
+class Decimal(object):
+    def __init__(self, s):
+  
+        def process_subsequence(ss):
+            output = list()
+            i = 0
+            
+            while i < len(ss):
+                if ss[i].isdigit(): # if digit then append
+                    output.append(int(ss[i]))
+                elif ss[i] == "(":
+                    start = i
+                    level = 1
+                    while (level > 0) and (i < len(ss)):
+                        i += 1
+                        if ss[i] == "(": level += 1
+                        elif ss[i] == ")": level -= 1
+                    if level > 0 and i == len(ss):
+                        raise ValueError("Unmatched '('")
+                    if i == start + 1:
+                        raise ValueError("Parens must not be empty '()'")
+                    output.append(process_subsequence(ss[(start+1):i]))
+                elif ss[i] == ")":
+                    raise ValueError("Unmatched ')'")
+                else: 
+                    raise ValueError("Invalid character '%s'" % ss[i])
+                i += 1
+                
+            return output
+        
+        def check_numeric_list(ss):
+            if isinstance(ss , list):
+                return all([check_numeric_list(i) for i in ss])
+            elif isinstance(ss , int) and ss>=0 and ss<=9:
+                return True
+            else: 
+                raise ValueError("Invalid element '%s'" % ss)
+                
+        
+        if isinstance(s, basestring):
+            self.sequence = process_subsequence(s)
+        elif isinstance(s, list):
+            assert check_numeric_list(s)
+            self.sequence = s
+        else: 
+            raise ValueError("Neither string, nor list of digits: %s" % s)
 
+    def fedeg(self): 
+    # degree of the first element
+        return deg(self.sequence[0])
+        
+    def split(self, order, repetition = False):
+    # returns the first omega^order degits
+        def cut_first(ss, repetition=False):
+            first_element = ss.pop(0)
+            if repetition: ss.append(first_element)
+            pass    
 
-def rcompare(u,v):
-    def stringerize(a,b): return str(a) + '+' + str(b)
-	
-    tried = set()	
-    if log: print 'Recursive Comparing', u, 'and', v, 'degree', "\n"
-    while not(stringerize(u,v) in tried):
-        tried.add(stringerize(u,v))    
-        d = min(degree(u[0]), degree(v[0]))
-	cu = list()
-	cv = list()
-        u = cutFromBeginning(u, cu, d, 1)
-        v = cutFromBeginning(v, cv, d, 1)
-        res = dcompare(cu,cv,d)
-        if res!=0: return(res)
-    return 0
+        end = copy.deepcopy(self)
+        begin = Decimal([])
+        
+        if deg(self.sequence) <= order:
+            raise ValueError("Not long enough.")
+        
+        while end.fedeg() < order: 
+            begin.sequence.append(end.sequence[0])
+            cut_first(end.sequence, repetition)
+            
+        if end.fedeg() == order:
+            begin.sequence.append(end.sequence[0])
+            cut_first(end.sequence, repetition)
+        else: # end.fedeg() > order
+            tmp, tmp2 = Decimal(end.sequence[0]).split(order, True)
+            begin.sequence += tmp.sequence
+            end.sequence[0] = tmp2.sequence
+            
+        return begin, end
 
-def dcompare(x,y,d):
-    if log: print 'Comparing', x, 'and', y, 'degree', d, "\n" 
-    if d==0 and x[0]>y[0]: return 1
-    if d==0 and x[0]==y[0]: return 0
-    if d==0 and x[0]<y[0]: return -1
-    while len(x)>1 or len(y)>1:
-	   d2 = min(degree(x[0]), degree(y[0]))
-           cx = list()
-	   cy = list()
-           x = cutFromBeginning(x, cx, d2, 0)
-	   y = cutFromBeginning(y, cy, d2, 0)
-           cxy = dcompare(cx,cy,d2)
-	   if cxy!=0: return cxy
-    if degree(x[0]) != degree(y[0]):
-           d2 = min(degree(x[0]), degree(y[0]))
-           cx = list()
-	   cy = list()
-           x = cutFromBeginning(x, cx, d2, 0)
-	   y = cutFromBeginning(y, cy, d2, 0)
-           cxy = dcompare(cx,cy,d2)
-	   if cxy!=0: return cxy
-           if len(x)>0 and anynonzero(x): return 1
-	   if len(y)>0 and anynonzero(y): return -1
-	   return(0)
-    return rcompare(x[0],y[0])
+    def __repr__(self):
+        tmp = str(self.sequence) # convert list to string
+        tmp = tmp.replace('[','(').replace(']',')') # brackets
+        tmp = tmp.replace(' ','').replace(',','') # spaces
+        return tmp[1:-1] 
 
-def anynonzero(x):
-  if isinstance(x, int) and x==0: return(False)
-  if isinstance(x, int) and x!=0: return(True)
-  if isinstance(x, list): return any([anynonzero(k) for k in x])
+    def is_zero(self):
+        # test if all digits are zeros    
+        def anynonzero(x):
+            if isinstance(x, int) and x==0: return(False)
+            if isinstance(x, int) and x!=0: return(True)
+            if isinstance(x, list): return any([anynonzero(k) for k in x])
+        return not anynonzero(self.sequence)
 
-def compare(x,y):
-    res = 0
-    a = copy.deepcopy(x)
-    b = copy.deepcopy(y)
-    while res == 0 and len(a)>0 and len(b)>0:
-        d = min(degree(a[0]), degree(b[0]))
-	ca = list()
-	cb = list()
-        a = cutFromBeginning(a, ca, d, 0)
-	b = cutFromBeginning(b, cb, d, 0)
-        res = dcompare(ca,cb,d)
-    if res == 0 and len(a)>0 and anynonzero(a): res = 1
-    if res == 0 and len(b)>0 and anynonzero(b): res = -1
-    return(res)
-   
-compare(readit('1(36(6))'),readit('13(6)'))
+    def __compare__(self, other):
+        # compares self to other, returns 1 if greater, 0 if equal, -1 if less        
 
-s = "1((0)1((8)6))4(0)1"
-ss = readit(s)
-rr = list()
+        def stringerize(x, y):
+            return str(x.sequence) + '+' + str(y.sequence)
 
-ss = cutFromBeginning(ss, rr, 4, 0)
-print ss,"\n",rr
+        def dcompare(x, y, order=0, repetition=False):
+        # comparison of two pieces of the length omega^order
+            if repetition:
+                tried_combinations = set()
+                while not(stringerize(x,y) in tried_combinations):
+                    tried_combinations.add(stringerize(x,y))
+                    d = min(x.fedeg(), y.fedeg())
+                    dx, x = x.split(d, True)
+                    dy, y = y.split(d, True)
+                    compdxy = dcompare(dx, dy, d, False)
+                    if compdxy != 0: return compdxy
+                return 0
+                
+            else:
+                
+                if order==0 and x.sequence[0] > y.sequence[0]: return 1
+                if order==0 and x.sequence[0]== y.sequence[0]: return 0
+                if order==0 and x.sequence[0] < y.sequence[0]: return -1
+        
+                while len(x.sequence)>1 or len(y.sequence)>1:
+                    d = min(x.fedeg(), y.fedeg())
+                    dx, x = x.split(d, False)
+                    dy, y = y.split(d, False)
+                    compdxy = dcompare(dx, dy, d)
+                    if compdxy!=0: return compdxy
+        
+                if x.fedeg() != y.fedeg():
+                    d = min(x.fedeg(), y.fedeg())
+                    dx, x = x.split(d, False)
+                    dy, y = y.split(d, False)
+                    compdxy = dcompare(dx, dy, d)
+                    if compdxy!=0: 
+                        return compdxy
+                    elif len(x.sequence)>0 and not x.is_zero():
+                        return 1
+                    elif len(y.sequence)>0 and not y.is_zero(): 
+                        return -1
+                    else: 
+                        return 0
+                else:
+                    d = x.fedeg()
+                    x = Decimal(x.sequence[0])
+                    y = Decimal(y.sequence[0])
+                    return dcompare(x, y, d, True)
+
+        if not isinstance(other, Decimal):
+            raise ValueError("Not implemented")
+        output = 0
+        a = copy.deepcopy(self)
+        b = copy.deepcopy(other)
+    
+        while output == 0 and len(a.sequence)>0 and len(b.sequence)>0:
+            d = min(a.fedeg(), b.fedeg())
+            da, a = a.split(d, False)
+            db, b = b.split(d, False)
+            output = dcompare(da, db, d, False)
+        
+        if output == 0 and len(a.sequence)>0 and not a.is_zero(): output = 1
+        if output == 0 and len(b.sequence)>0 and not b.is_zero(): output = -1
+        return(output)
+        
+    def __ne__(self, other):
+        return not self == other
+        
+    def __eq__(self, other):
+        return self.__compare__(other) == 0
+        
+    def __lt__(self, other):
+        return self.__compare__(other) == -1
 
 ordered_examples = [
   "(0)1",
@@ -118,62 +182,43 @@ ordered_examples = [
   "(1)(2)(3)(4)",
   "(1)(3)(3)(4)",
   "2",
-  "2(0)",
-  "2(0)0",
   "2(0)(0)1",
   "2(0)1",
   "(2)(2)(3)(4)",
   "(2)3",
-  "(2)(3)",
   "((2)3)",
+  "(2)(3)",
   "54",
   "55",
+  "((551)57)4",
   "552",
   "5589",
   "56",
-  "((551)57)4", # this isn't where I'd expect this to go
   "8",
+  "(81)", 
   "89",
-  "(81)", # this isn't where I'd expect this to go either
   "9",
   "(9)",
+  "((9)1)2",
+  "(((9)1)((27)))8",
+  "(((9)1)2)7",
+  "(((9)1)2)73(((8(46)))5)",
   "(9)3",
   "(9)4",
   "(9)4(8)1",
   "(9)5",
   "(9)(9)",
-  "((9))1",
-  "((9)1)2",
-  "(((9)1)2)7",
-  "(((9)1)2)73(((8(46)))5)",
-  "(((9)1)((27)))8",
+  "((9))1"
 ]
+   
+for i, bigger in enumerate(ordered_examples):
+  for j, smaller in enumerate(ordered_examples):
+    assert repr(Decimal(smaller)) == smaller
+    assert Decimal(smaller) == Decimal(smaller)
 
-ke = [readit(s) for s in ordered_examples]
+    if i > j:
+      assert Decimal(smaller) < Decimal(bigger)
+      assert not Decimal(smaller) == Decimal(bigger)
+      assert not Decimal(bigger) < Decimal(smaller)
 
-for i in range(len(ke)-1):
-    if compare(ke[i], ke[i+1]) == 1:
-        print  str2(ke[i]) + ' and ' + str2(ke[i+1]) + "\n"	
-
-
-swapped = True
-j = 0
-while swapped:
-  j+=1
-  print j, "\n"
-  swapped = False
-  for i in range(len(ke)-1):
-	  if compare(ke[i], ke[i+1]) == 1:
-		  print 'Swapping', ke[i], 'and', ke[i+1], "\n"
-		  ke[i], ke[i+1] = ke[i+1], ke[i]
-                  ordered_examples[i], ordered_examples[i+1] = ordered_examples[i+1], ordered_examples[i]
-		  swapped = True
-
-log = True
-
-
-def str2(x):
-  return str(x).replace('[','(').replace(']',')').replace(' ','')
-
-for k in ke:
-	print(str2(k))
+print "all tests pass"
