@@ -1,68 +1,116 @@
-# See http://mathwithbaddrawings.com/2013/08/13/the-kaufman-decimals
+import copy
 
-class Decimal(object):
-  def __init__(self, s, repeated=False, pos=0):
-    def eat_subsequence():
-      paren_count = 1
-      endpos = pos
-      while True:
-        endpos += 1
-        if endpos >= len(s):
-          raise ValueError("Reached end of input without matching all parens.")
-        if s[endpos] == '(':
-          paren_count += 1
-        elif s[endpos] == ')':
-          paren_count -= 1
-          if paren_count == 0:
-            self.sequence.append(Decimal(s[:endpos], repeated=True, pos=pos+1))
-            return endpos
+def readit(s):
+    kd = list()
+    i = 0
+    while i<len(s):
+        if s[i]!="(":
+            kd.append(int(s[i]))
+        else:
+            start = i
+            level = 1
+            while level>0:
+                i+=1
+                if s[i]=="(": level+=1
+                elif s[i]==")": level-=1
+            repetition = readit(s[(start+1):i])
+            kd.append(repetition)
+        i+=1
+    return(kd)
 
-    self.sequence = []
-    self.repeated = repeated
-    while True:
-      if pos >= len(s):
-        break
-      c = s[pos]
-      if c == '(':
-        pos = eat_subsequence()
-      elif c == ')':
-        raise ValueError("Unmatched ')' at %s" % pos)      
-      elif c.isdigit():
-        self.sequence.append(int(c))
-      else:
-        raise ValueError("Invalid character '%s' at position %s" % (c, pos))
-      pos += 1
+def degree(kd):
+    if isinstance(kd , int): return(0)
+    if isinstance(kd , list): return(max([degree(k) for k in kd])+1)
 
-  def __repr__(self):
-    r = "".join(repr(x) for x in self.sequence)
-    return r if not self.repeated else "(" + r + ")"
+def cutFromBeginning(kd,output,order,rep):
+    while degree(kd[0]) < order: 
+        output.append(kd[0])
+	if rep:
+	    kd = kd[1:] + [kd[0]]
+	else:
+	    kd = kd[1:]
+	if len(kd) == 0: return None # empty 
+    if degree(kd[0]) > order:
+        kd[0] = cutFromBeginning(kd[0],output,order,1)
+    else: # imply degree(kd[0]) == order
+        output.append(kd[0])
+        if rep:
+	    kd = kd[1:] + [kd[0]]
+	else:
+	    kd = kd[1:]
+    return kd	
 
-  def __ne__(self, other):
-    return not self == other
 
-  def __eq__(self, other):
-    if type(self) != type(other):
-      return False
-    if len(self.sequence) != len(other.sequence):
-      return False
-    if self.repeated != other.repeated:
-      return False
-    for s, o in zip(self.sequence, other.sequence):
-      if s != o:
-        return False
-    return True
+def rcompare(u,v):
+    def stringerize(a,b): return str(a) + '+' + str(b)
+	
+    tried = set()	
+    if log: print 'Recursive Comparing', u, 'and', v, 'degree', "\n"
+    while not(stringerize(u,v) in tried):
+        tried.add(stringerize(u,v))    
+        d = min(degree(u[0]), degree(v[0]))
+	cu = list()
+	cv = list()
+        u = cutFromBeginning(u, cu, d, 1)
+        v = cutFromBeginning(v, cv, d, 1)
+        res = dcompare(cu,cv,d)
+        if res!=0: return(res)
+    return 0
 
-  def __lt__(self, other):
-    print "comparing '%s' with '%s'" % (self, other)
-    if type(self) != type(other):
-      return self.sequence[0] < other
-    for s, o in zip(self.sequence, other.sequence):
-      if s != o:
-        if type(s) == type(0):
-          return not o < s
-        return s < o
-    # they're equal as long as they go, but the shorter one is smaller
-    return len(self.sequence) < len(other.sequence)
+def dcompare(x,y,d):
+    if log: print 'Comparing', x, 'and', y, 'degree', d, "\n" 
+    if d==0 and x[0]>y[0]: return 1
+    if d==0 and x[0]==y[0]: return 0
+    if d==0 and x[0]<y[0]: return -1
+    while len(x)>1 or len(y)>1:
+	   d2 = min(degree(x[0]), degree(y[0]))
+           cx = list()
+	   cy = list()
+           x = cutFromBeginning(x, cx, d2, 0)
+	   y = cutFromBeginning(y, cy, d2, 0)
+           cxy = dcompare(cx,cy,d2)
+	   if cxy!=0: return cxy
+    if degree(x[0]) != degree(y[0]):
+           d2 = min(degree(x[0]), degree(y[0]))
+           cx = list()
+	   cy = list()
+           x = cutFromBeginning(x, cx, d2, 0)
+	   y = cutFromBeginning(y, cy, d2, 0)
+           cxy = dcompare(cx,cy,d2)
+	   if cxy!=0: return cxy
+           if len(x)>0 and anynonzero(x): return 1
+	   if len(y)>0 and anynonzero(y): return -1
+	   return(0)
+    return rcompare(x[0],y[0])
+
+def anynonzero(x):
+  if isinstance(x, int) and x==0: return(False)
+  if isinstance(x, int) and x!=0: return(True)
+  if isinstance(x, list): return any([anynonzero(k) for k in x])
+
+def compare(x,y):
+    res = 0
+    a = copy.deepcopy(x)
+    b = copy.deepcopy(y)
+    while res == 0 and len(a)>0 and len(b)>0:
+        d = min(degree(a[0]), degree(b[0]))
+	ca = list()
+	cb = list()
+        a = cutFromBeginning(a, ca, d, 0)
+	b = cutFromBeginning(b, cb, d, 0)
+        res = dcompare(ca,cb,d)
+    if res == 0 and len(a)>0 and anynonzero(a): res = 1
+    if res == 0 and len(b)>0 and anynonzero(b): res = -1
+    return(res)
+   
+compare(readit('1(36(6))'),readit('13(6)'))
+
+s = "1((0)1((8)6))4(0)1"
+ss = readit(s)
+rr = list()
+
+ss = cutFromBeginning(ss, rr, 4, 0)
+print ss,"\n",rr
 
 ordered_examples = [
   "(0)1",
@@ -100,15 +148,32 @@ ordered_examples = [
   "(((9)1)2)73(((8(46)))5)",
   "(((9)1)((27)))8",
 ]
-   
-for i, bigger in enumerate(ordered_examples):
-  for j, smaller in enumerate(ordered_examples):
-    assert repr(Decimal(smaller)) == smaller
-    assert Decimal(smaller) == Decimal(smaller)
 
-    if i > j:
-      assert Decimal(smaller) < Decimal(bigger)
-      assert not Decimal(smaller) == Decimal(bigger)
-      assert not Decimal(bigger) < Decimal(smaller)
+ke = [readit(s) for s in ordered_examples]
 
-print "all tests pass"
+for i in range(len(ke)-1):
+    if compare(ke[i], ke[i+1]) == 1:
+        print  str2(ke[i]) + ' and ' + str2(ke[i+1]) + "\n"	
+
+
+swapped = True
+j = 0
+while swapped:
+  j+=1
+  print j, "\n"
+  swapped = False
+  for i in range(len(ke)-1):
+	  if compare(ke[i], ke[i+1]) == 1:
+		  print 'Swapping', ke[i], 'and', ke[i+1], "\n"
+		  ke[i], ke[i+1] = ke[i+1], ke[i]
+                  ordered_examples[i], ordered_examples[i+1] = ordered_examples[i+1], ordered_examples[i]
+		  swapped = True
+
+log = True
+
+
+def str2(x):
+  return str(x).replace('[','(').replace(']',')').replace(' ','')
+
+for k in ke:
+	print(str2(k))
